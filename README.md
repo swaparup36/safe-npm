@@ -32,9 +32,13 @@ And those scripts can:
 
 safe-npm sits between you and npm and makes the install process safe by default.
 
-It blocks all lifecycle scripts from running automatically, inspects them in an isolated environment, highlights anything suspicious, and lets you decide whether they should be trusted.
+It:
+- blocks lifecycle scripts from running automatically
+- analyzes them in an isolated sandbox
+- detects suspicious behavior (network, exec, file access, etc.)
+- lets you decide whether to trust them
 
-If you approve a script, it’s then executed normally so your dependencies still work as expected - just without the risk of blind execution.
+If you approve a script, it is executed normally so your dependencies still work — just without the risk of blind execution.
 
 ## Usage
 
@@ -69,11 +73,13 @@ snpm install
 
 ## What makes it useful
 - prevents silent supply chain attacks
-- gives visibility into what scripts actually do
+- gives visibility into what install scripts actually do
+- analyzes real runtime behavior
 - keeps your system safe by default
-- still works with normal npm workflow
+- integrates seamlessly into existing npm workflow
 
 ## Limitations (for now)
 - Linux only (uses firejail)
-- detection is basic (will improve)
-- fresh installation of packages are still not protected
+- detection is still heuristic-based
+- relies on sandbox analysis. Highly obfuscated or delayed attacks may evade detection
+- some legitimate packages may require manual approval

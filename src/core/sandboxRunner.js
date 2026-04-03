@@ -2,6 +2,7 @@ import { spawnSync } from "child_process";
 import path from "path";
 import fs from "fs";
 import { analyzeScript } from "./codeAnalyzer.js";
+import { analyzeSyscalls } from "./syscallAnalyzer.js";
 
 function canUseFirejail() {
   if (process.platform !== "linux") return false;
@@ -12,6 +13,7 @@ function canUseFirejail() {
 
   return !check.error && check.status === 0;
 }
+const FIREJAIL_AVAILABLE = canUseFirejail();
 
 function runDirect(script, cwd) {
   return spawnSync(script, {
@@ -21,39 +23,82 @@ function runDirect(script, cwd) {
   });
 }
 
-export function runInSandbox(script, sandboxPath, relativePath) {
+export function runInSandbox(script, sandboxPath, relativePath, meta) {
   console.log(`🔒 Running in sandbox: ${relativePath}`);
 
   const cwd = path.join(sandboxPath, relativePath);
 
   console.log(`Executing script: ${script}`);
-  const scriptPath = path.join(cwd, script.split(" ")[1]);
-  console.log(`Resolved script path: ${scriptPath}`);
 
-  // Scan the script to detect if it contains any suspicious patterns before execution
-  const scriptContent = readScriptFile(cwd, script.split(" ")[1]);
-  if (!scriptContent) {
-    console.error(`Failed to read script file: ${scriptPath}`);
-    return { stdout: "", stderr: "Failed to read script file", status: 1 };
+  const parts = script.match(/[^\s"]+|"([^"]*)"/g) || [];
+  const scriptFile = parts.find(p => p.endsWith(".js"));
+  const scriptPath = scriptFile
+    ? path.join(cwd, scriptFile.replace(/"/g, ""))
+    : null;
+
+  if (!scriptPath) {
+    console.warn("Could not determine script file from command: ", script);
   }
 
-  const preExecutionFindings = analyzeScript(scriptContent, scriptPath);
-  if (preExecutionFindings.length > 0) {
-    console.warn(`⚠️ Suspicious patterns detected in script ${relativePath}:`);
-    preExecutionFindings.forEach(f => console.warn(f));
+  if (scriptPath) {
+    console.log(`Resolved script path: ${scriptPath}`);
+  }
+
+  // Scan the script to detect if it contains any suspicious patterns before execution
+  let scriptContent = null;
+
+  if (scriptFile) {
+    scriptContent = readScriptFile(cwd, scriptFile.replace(/"/g, ""));
   } else {
-    console.log(`No suspicious patterns detected in script: ${relativePath}`);
+    console.warn("Skipping static analysis (no script file detected)");
+  }
+
+  if (scriptFile && !scriptContent) {
+    console.error(`Failed to read script file: ${scriptPath}`);
+  }
+
+  let preExecutionFindings = [];
+
+  if (scriptContent) {
+    preExecutionFindings = analyzeScript(scriptContent, scriptPath);
+
+    if (preExecutionFindings.length > 0) {
+      console.warn(`⚠️ Suspicious patterns detected in script ${relativePath}:`);
+      preExecutionFindings.forEach(f => console.warn(f));
+    } else {
+      console.log(`No suspicious patterns detected in script: ${relativePath}`);
+    }
   }
 
   let result;
 
-  if (canUseFirejail()) {
+  const safe = str => str.replace(/[^a-zA-Z0-9]/g, "_");
+  const traceFile = `/tmp/dg-${safe(meta.package || "unknown")}-${safe(meta.hook || "unknown")}-${Date.now()}.log`;
+
+  const straceContext = {
+    package: meta.package || "unknown",
+    hook: meta.hook || "unknown",
+    script: script,
+    traceFile
+  };
+  
+  if (FIREJAIL_AVAILABLE) {
     result = spawnSync(
       "firejail",
       [
         "--quiet",
         "--net=none",
         "--private",
+        "--rlimit-cpu=5",
+        "--rlimit-as=500000000",
+
+        "strace",
+        "-f",
+        "-e",
+        "trace=connect,execve,open",
+        "-o",
+        traceFile,
+
         "bash",
         "-c",
         script
@@ -78,6 +123,33 @@ export function runInSandbox(script, sandboxPath, relativePath) {
   // console.log("output: ", result.output);
   // console.log("pid: ", result.pid);
   // console.log("signal: ", result.signal);
+
+  if (result.error) {
+    console.error("Execution failed:", result.error);
+  }
+
+  if (result.status !== 0) {
+    console.warn(`Script exited with status ${result.status}`);
+  }
+
+  let syscallLogs = "";
+
+  try {
+    syscallLogs = fs.readFileSync(traceFile, "utf-8");
+  } catch {
+    console.warn("Could not read strace log");
+  }
+
+  const findings = analyzeSyscalls(syscallLogs, straceContext);
+
+  if (findings.length > 0) {
+    console.warn("\n🚨 Suspicious runtime behavior detected:");
+    findings.forEach(f => console.warn(f));
+  }
+
+  try {
+    fs.unlinkSync(traceFile);
+  } catch {}
 
   return {
     stdout: result.stdout,

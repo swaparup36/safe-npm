@@ -34,11 +34,21 @@ async function installSpecificPackages(packages) {
       console.log(`\n⚠️ Script detected: ${key}`);
       console.log(`Command: ${s.command}`);
 
+      const meta = {
+        package: s.name,
+        hook: s.hook
+      };
       const result = runInSandbox(
         s.command,
         sandboxPath,
-        s.relativePath
+        s.relativePath,
+        meta
       );
+
+      if (!result) {
+        console.error(`Failed to execute script in sandbox: ${s.command}`);
+        continue;
+      }
 
       console.log("---- Output ----");
       console.log(result.stdout || result.stderr);
