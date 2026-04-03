@@ -1,0 +1,7 @@
+/node_modules
+/.snpm
+/test-projects/*/node_modules
+/test-projects/*/.snpm
+/test-projects/*/package-lock.json
+/test-projects/*/yarn.lock
+/test-projects/*/pnpm-lock.yaml
