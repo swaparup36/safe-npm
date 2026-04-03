@@ -7,3 +7,11 @@ export function runNpmInstall() {
     stdio: "inherit"
   });
 }
+
+export function runNpmInstallPackage(packages) {
+  console.log(`📦 Installing packages: ${packages.join(", ")} (scripts disabled)...`);
+  
+  execSync(`npm install ${packages.join(" ")} --ignore-scripts`, {
+    stdio: "inherit"
+  });
+}
