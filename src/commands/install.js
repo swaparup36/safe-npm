@@ -26,7 +26,7 @@ async function installSpecificPackages(packages) {
     for (const s of scripts) {
       const key = `${s.name}:${s.hook}`;
 
-      if (trust[key] === "allow") {
+      if (trust[`${key}@${s.version}`] === "allow") {
         console.log(`✅ Trusted: ${key}`);
         continue;
       }
@@ -55,14 +55,11 @@ async function installSpecificPackages(packages) {
       console.log(result.status === 0 ? "Script executed successfully" : "Script execution failed");
 
       const decision = await askUser(
-        "Allow this script? (y/n/always): "
+        "Allow this script? (y/n): "
       );
 
-      if (decision === "always" || decision === "y") {
-        if (decision === "always") {
-          trust[key] = "allow";
-        }
-
+      if (decision === "y") {
+        trust[`${key}@${s.version}`] = "allow";
         console.log(`Running ${key} in real environment...`);
 
         execSync(`npm rebuild ${s.name}`, {
@@ -89,7 +86,7 @@ async function installFromPackageJson() {
     for (const s of scripts) {
       const key = `${s.name}:${s.hook}`;
 
-      if (trust[key] === "allow") {
+      if (trust[`${key}@${s.version}`] === "allow") {
         console.log(`✅ Trusted: ${key}`);
         continue;
       }
@@ -97,10 +94,15 @@ async function installFromPackageJson() {
       console.log(`\n⚠️ Script detected: ${key}`);
       console.log(`Command: ${s.command}`);
 
+      const meta = {
+        package: s.name,
+        hook: s.hook
+      };
       const result = runInSandbox(
         s.command,
         sandboxPath,
-        s.relativePath
+        s.relativePath,
+        meta
       );
 
       console.log("---- Output ----");
@@ -108,14 +110,11 @@ async function installFromPackageJson() {
       console.log(result.status === 0 ? "Script executed successfully" : "Script execution failed");
 
       const decision = await askUser(
-        "Allow this script? (y/n/always): "
+        "Allow this script? (y/n): "
       );
 
-      if (decision === "always" || decision === "y") {
-        if (decision === "always") {
-          trust[key] = "allow";
-        }
-
+      if (decision === "y") {
+        trust[`${key}@${s.version}`] = "allow";
         console.log(`Running ${key} in real environment...`);
 
         execSync(`npm rebuild ${s.name}`, {

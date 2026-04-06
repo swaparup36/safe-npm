@@ -1,1 +1,6 @@
-{}
+{
+  "@prisma/engines:postinstall@7.6.0": "allow",
+  "esbuild:postinstall@0.28.0": "allow",
+  "prisma:preinstall@7.6.0": "allow",
+  "sharp:install@0.34.5": "allow"
+}

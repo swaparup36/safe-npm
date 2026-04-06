@@ -113,7 +113,8 @@ function addScriptsFromPackageDir(packageDir, scripts, scriptSeen) {
       name: data.name,
       hook,
       command: data.scripts[hook],
-      relativePath: path.relative(process.cwd(), packageDir)
+      relativePath: path.relative(process.cwd(), packageDir),
+      version: data.version
     });
   }
 }
